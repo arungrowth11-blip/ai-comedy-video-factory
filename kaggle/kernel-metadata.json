@@ -1,0 +1,16 @@
+{
+  "id": "YOUR_KAGGLE_USERNAME/auto-comedy-video-factory",
+  "title": "auto-comedy-video-factory",
+  "code_file": "worker.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "YOUR_KAGGLE_USERNAME/indian-laugh-memes"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
