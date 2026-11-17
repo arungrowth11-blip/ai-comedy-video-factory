@@ -1,0 +1,87 @@
+name: Daily AI Video Factory
+ 
+on:
+  schedule:
+    - cron: '30 2 * * *'   # 8:00 AM IST -> 2 Videos
+    - cron: '30 12 * * *'  # 6:00 PM IST -> 2 Videos
+  workflow_dispatch:
+ 
+jobs:
+  trigger-kaggle-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+ 
+      - name: Install Kaggle CLI
+        run: pip install -q kaggle
+ 
+      - name: Setup Kaggle Auth
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          python - << 'PY'
+          import os, json
+          os.makedirs(os.path.expanduser("~/.kaggle"), exist_ok=True)
+          cred_path = os.path.expanduser("~/.kaggle/kaggle.json")
+          with open(cred_path, "w") as f:
+            json.dump({
+                "username": os.environ["KAGGLE_USERNAME"].strip(),
+                "key": os.environ["KAGGLE_KEY"].strip()
+            }, f)
+          os.chmod(cred_path, 0o600)
+          PY
+ 
+      - name: Inject Secrets, Auto-Check Dataset & Push to Kaggle GPU
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - << 'PY'
+          import os, json, subprocess
+ 
+          user = os.environ["KAGGLE_USERNAME"].strip()
+          meta_path = "kaggle/kernel-metadata.json"
+          with open(meta_path, "r") as f:
+              meta = json.load(f)
+ 
+          meta["id"] = f"{user}/auto-comedy-video-factory"
+          dataset_slug = f"{user}/indian-laugh-memes"
+ 
+          # Check if user has already created the optional meme dataset on Kaggle
+          chk = subprocess.run(["kaggle", "datasets", "files", dataset_slug], capture_output=True, text=True)
+          if chk.returncode == 0:
+              meta["dataset_sources"] = [dataset_slug]
+              print(f"Dataset {dataset_slug} found and linked!")
+          else:
+              meta["dataset_sources"] = []
+              print(f"Dataset {dataset_slug} not found yet; using built-in reaction outro card fallback.")
+ 
+          with open(meta_path, "w") as f:
+              json.dump(meta, f, indent=2)
+ 
+          # Prepend secrets safely using chr(10) so newline escaping never breaks
+          lines = ["import os"]
+          keys = [
+              "HF_TOKEN", "DEEPSEEK_API_KEY", "GROQ_API_KEY",
+              "GEMINI_API_KEY", "OPENROUTER_API_KEY",
+              "TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"
+          ]
+          for k in keys:
+              lines.append(f"os.environ[{json.dumps(k)}] = {json.dumps(os.environ.get(k, ''))}")
+ 
+          with open("kaggle/worker.py", "r") as f:
+              code = f.read()
+          with open("kaggle/worker.py", "w") as f:
+              f.write(chr(10).join(lines) + chr(10) + chr(10) + code)
+          PY
+          kaggle kernels push -p kaggle/
+          sleep 10
+          kaggle kernels status "${{ secrets.KAGGLE_USERNAME }}/auto-comedy-video-factory" || true
